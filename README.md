@@ -37,13 +37,6 @@ requirements, and writes a package that Task 3 can process.
 Generated download directories are intentionally separate from source code.
 
 
-## Requirements
-
-- Windows PowerShell
-- Python 3.10 or newer
-- Internet access for live search and downloads
-- A Brave Search API key
-
 
 Install the unified dependencies from the repository root:
 

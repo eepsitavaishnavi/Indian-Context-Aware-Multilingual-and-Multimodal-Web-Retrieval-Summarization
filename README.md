@@ -353,8 +353,3 @@ python -m pytest -q
 python -m py_compile main.py run_pipeline.py search_engines.py
 ```
 
-
-
-
-- Task 3 OCR and final evidence synthesis are outside this repository's
-  current Task 2 implementation.

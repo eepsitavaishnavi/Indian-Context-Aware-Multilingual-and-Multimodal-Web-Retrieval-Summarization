@@ -1,4 +1,4 @@
-#Task 1 and Task 2 Research Pipeline
+# Task 1 and Task 2 Research Pipeline
 
 This repository contains the integrated implementation for:
 

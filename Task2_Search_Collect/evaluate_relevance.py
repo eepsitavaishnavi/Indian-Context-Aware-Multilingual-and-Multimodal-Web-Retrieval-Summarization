@@ -14,6 +14,7 @@ import argparse
 import csv
 import json
 import math
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -27,30 +28,57 @@ def load_package(path: Path):
     return package.get("task3_input", package)
 
 
-def infer_original_query(query_text: str, title: str, url: str,
-                         original_queries):
-    text = f"{query_text} {title} {url}".lower()
-    topic_markers = [
-        (["savitribai", "phule"], ["savitribai", "phule"]),
-        (["green revolution", "indian small farmers", "agrarian structure",
-          "indigenous crops"], ["green revolution"]),
-        (["indus valley", "indus civilization", "harappan",
-          "indusvalley"], ["indus valley"]),
-        (["constitution", "constitutional", "fundamental rights",
-          "maulik adhikar", "right to equality"], ["constitution"]),
-        (["monsoon", "rainfall", "mansoon", "मानसून"], ["मानसून", "monsoon"]),
-        (["1857", "revolt of 1857", "kranti"], ["1857", "kranti"]),
-        (["dandi", "salt march", "mahatma gandhi"], ["dandi", "gandhi"]),
-        (["lord ram", "lord rama", "shri ram", "भगवान राम",
-          "राम को", "ramayana"], ["भगवान राम", "ram"]),
-    ]
-    for markers, question_markers in topic_markers:
-        if any(marker in text for marker in markers):
-            for question in original_queries:
-                if any(marker.lower() in question.lower()
-                       for marker in question_markers):
-                    return question
-    return original_queries[0] if original_queries else ""
+def generic_original_query(query_text: str, ranked_urls,
+                           document_query_map, original_queries):
+    """Resolve a search variant without topic-specific marker lists."""
+    mapped = []
+    for result in ranked_urls:
+        canonical = result.get("canonical_url") or result.get("url", "")
+        question = document_query_map.get(canonical)
+        if question:
+            mapped.append(question)
+    if mapped:
+        counts = defaultdict(int)
+        for question in mapped:
+            counts[question] += 1
+        winner = max(counts, key=counts.get)
+        if sum(counts[q] == counts[winner] for q in counts) == 1:
+            return winner
+
+    if len(original_queries) == 1:
+        return original_queries[0]
+
+    stopwords = {
+        "a", "an", "the", "what", "which", "who", "how", "why", "when",
+        "where", "is", "are", "was", "were", "did", "do", "does",
+        "का", "के", "की", "को", "में", "पर", "से", "क्या", "कौन", "कैसे",
+    }
+    query_terms = {
+        term for term in re.findall(
+            r"[A-Za-z0-9]+|[\u0900-\u097F]+",
+            query_text.lower(),
+        )
+        if term not in stopwords
+    }
+    scores = []
+    for question in original_queries:
+        question_terms = {
+            term for term in re.findall(
+                r"[A-Za-z0-9]+|[\u0900-\u097F]+",
+                question.lower(),
+            )
+            if term not in stopwords
+        }
+        scores.append((
+            len(query_terms & question_terms) /
+            max(1, len(query_terms | question_terms)),
+            question,
+        ))
+    scores.sort(reverse=True)
+    if scores and scores[0][0] > 0:
+        if len(scores) == 1 or scores[0][0] > scores[1][0]:
+            return scores[0][1]
+    return ""
 
 
 def prepare(input_path: Path, label_path: Path):
@@ -82,18 +110,10 @@ def prepare(input_path: Path, label_path: Path):
             if mapped_queries:
                 original_query = mapped_queries[0]
             else:
-                inferred_title = " ".join(
-                    str(result.get("title", ""))
-                    for result in ranked_urls
-                )
-                inferred_url = " ".join(
-                    str(result.get("url", ""))
-                    for result in ranked_urls
-                )
-                original_query = infer_original_query(
+                original_query = generic_original_query(
                     query_text,
-                    inferred_title,
-                    inferred_url,
+                    ranked_urls,
+                    document_query_map,
                     original_queries,
                 )
         if not details.get("ranked_urls"):
@@ -261,3 +281,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,33 +1,3 @@
-"""
-main.py - Task 2: On-the-Fly Web Search, Scraping & Multimodal Content Acquisition
-
-Full compliance with Task 2 requirements:
-  - Retrieve top-k per multilingual query
-  - Merge duplicate URLs (with provenance preservation)
-  - Study licences (CC0/CC BY/CC BY-SA/open government/institutional)
-  - Respect robots.txt + meta robots + X-Robots-Tag + rate limits + access restrictions
-  - Collect HTML, linked PDFs, linked images (when permitted)
-  - Store metadata: URL, title, author/org, pub_date, domain, language, content_type
-  - Accurately identify direct-extraction vs OCR content
-
-Downloads are organised per-query:
-    downloads/html_pages/<query_slug>/<uid>_<slug>.html
-    downloads/pdfs/<query_slug>/<uid>_<slug>.pdf
-    downloads/photos/<query_slug>/<uid>_<slug>.<ext>
-where <query_slug> is derived from `original_query` and (in a batch run)
-prefixed with a 1-based run index so folders sort in the order asked.
-
-Brave Search API key is read from the environment variable BRAVE_API_KEY.
-If unset, the search cascade falls through to DuckDuckGo automatically.
-
-Licence study:
-  `licence_category`   — what the page declared (cc-by-4.0, proprietary, unknown…)
-  `source_type`        — what kind of institution hosts it (government, academic…)
-  `licence_candidates` — if no licence tag was found, a candidate suggested by
-                         source_type (e.g. government_open). This is a SIGNAL,
-                         not a reclassification — `licence_category` stays 'unknown'.
-"""
-
 import json
 import os
 import re
@@ -824,10 +794,17 @@ def merge_duplicates(docs):
 def load_task1_input(path):
     with open(path, encoding='utf-8-sig') as f:
         data = json.load(f)
+    return normalize_task1_objects(data, source=str(path))
+
+
+def normalize_task1_objects(data, source="request"):
+    """Normalize compact/full Task 1 shapes for in-process and API callers."""
     objects = data if isinstance(data, list) else [data]
     for i, obj in enumerate(objects):
         if not isinstance(obj, dict):
-            raise ValueError(f"Task 1 object #{i} in {path} must be a JSON object.")
+            raise ValueError(
+                f"Task 1 object #{i} in {source} must be a JSON object."
+            )
 
         # Accept both Task 1's full response (`query`) and its compact API
         # contract (`text`), while keeping one canonical shape for retrieval.
@@ -840,12 +817,13 @@ def load_task1_input(path):
 
         if 'search_queries' not in obj or not obj['search_queries']:
             raise ValueError(
-                f"Task 1 object #{i} in {path} has no non-empty 'search_queries' "
+                f"Task 1 object #{i} in {source} has no non-empty 'search_queries' "
                 f"list. Got keys: {list(obj.keys())}")
         for j, sq in enumerate(obj['search_queries']):
             if not isinstance(sq, dict):
                 raise ValueError(
-                    f"Task 1 object #{i}, search_queries[{j}] in {path} must be an object.")
+                    f"Task 1 object #{i}, search_queries[{j}] in {source} "
+                    "must be an object.")
             if not sq.get('query') and sq.get('text'):
                 sq['query'] = sq['text']
             if not sq.get('query'):
@@ -903,19 +881,37 @@ def search_and_collect(search_queries, top_k=10, download=True, query_index=None
         kind = item.get('kind', 'translation')
         score = item.get('score')
         region = item.get('region', 'in-en')
+        item['original_query'] = original_query
         print(f"\n{'='*60}\n[QUERY] {q}  (lang={lang}, kind={kind})\n{'='*60}")
 
         results, engine_name = search_web(q, region=region, max_results=top_k,
                                            api_key=BRAVE_API_KEY, search_lang=lang)
         item['engine_used'] = engine_name
         item['results_returned'] = len(results)
+        item['ranked_urls'] = [
+            {
+                'rank': rank,
+                'url': r.get('url', ''),
+                'title': r.get('title', ''),
+                'canonical_url': normalize_url(r.get('url', '')),
+            }
+            for rank, r in enumerate(results, start=1)
+            if r.get('url')
+        ]
         raw_count += len(results)
 
-        for r in results:
+        for rank, r in enumerate(results, start=1):
             url = r.get('url', '')
             if not url:
                 continue
-            url_to_origin[url].append({'query': q, 'kind': kind, 'score': score, 'language': lang})
+            url_to_origin[url].append({
+                'query': q,
+                'kind': kind,
+                'score': score,
+                'language': lang,
+                'search_rank': rank,
+                'rank': rank,
+            })
             if len(r.get('text', '')) > len(url_to_snippet.get(url, {}).get('text', '')):
                 url_to_snippet[url] = r
 
@@ -1227,7 +1223,7 @@ def save_output(documents, stats, top_k):
         d for d in documents
         if not d['needs_ocr']
         and d.get('extraction_status') == 'success'
-        and d.get('text')
+        and d.get('saved_path')
     ]
 
     ctypes = defaultdict(int)
@@ -1259,12 +1255,14 @@ def save_output(documents, stats, top_k):
     for q in variants:
         key = f"{q['query']}  [{q.get('kind', 'translation')}]"
         search_stats[key] = {
+            'original_query': q.get('original_query', ''),
             'language': q['language'],
             'kind': q.get('kind', 'translation'),
             'score': q.get('score'),
             'engine_used': q.get('engine_used', 'unknown'),
             'results_returned': q.get('results_returned', 0),
             'top_k_requested': top_k,
+            'ranked_urls': q.get('ranked_urls', []),
         }
 
     output = {

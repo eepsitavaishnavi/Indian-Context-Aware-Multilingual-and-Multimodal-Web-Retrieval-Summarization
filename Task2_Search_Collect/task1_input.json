@@ -1,0 +1,425 @@
+[
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "भगवान राम के जीवन से हमें क्या सीख मिलती है?",
+    "detected_language": "hindi_devanagari",
+    "normalized_query": "भगवान राम के जीवन से हमें क्या सीख मिलती है?",
+    "devanagari_query": "भगवान राम के जीवन से हमें क्या सीख मिलती है?",
+    "english_query": "God राम of जीवन from हin what सीख मिलती is",
+    "intent": "general_information",
+    "named_entities": [],
+    "key_terms": [
+      "भगवान",
+      "राम",
+      "जीवन",
+      "से",
+      "हमें",
+      "सीख",
+      "मिलती"
+    ],
+    "constraints": {
+      "numbers": [],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "भगवान राम के जीवन से हमें क्या सीख मिलती है?",
+        "language": "hi",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      },
+      {
+        "query": "God राम of जीवन from हin what सीख मिलती is",
+        "language": "en",
+        "kind": "translation",
+        "score": 0.9,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  },
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "भारतीय संविधान में मौलिक अधिकार कौन से हैं?",
+    "detected_language": "hindi_devanagari",
+    "normalized_query": "भारतीय संविधान में मौलिक अधिकार कौन से हैं?",
+    "devanagari_query": "भारतीय संविधान में मौलिक अधिकार कौन से हैं?",
+    "english_query": "Indian संविधान in मौलिक अधिofर who from are",
+    "intent": "general_information",
+    "named_entities": [
+      {
+        "text": "भारत",
+        "canonical_form": "India",
+        "type": "LOCATION"
+      }
+    ],
+    "key_terms": [
+      "India",
+      "भारतीय",
+      "संविधान",
+      "मौलिक",
+      "अधिकार",
+      "कौन",
+      "से"
+    ],
+    "constraints": {
+      "numbers": [],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "भारतीय संविधान में मौलिक अधिकार कौन से हैं?",
+        "language": "hi",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      },
+      {
+        "query": "Indian संविधान in मौलिक अधिofर who from are",
+        "language": "en",
+        "kind": "translation",
+        "score": 0.9,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  },
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "भारतीय मानसून कृषि के लिए क्यों महत्वपूर्ण है?",
+    "detected_language": "hindi_devanagari",
+    "normalized_query": "भारतीय मानसून कृषि के लिए क्यों महत्वपूर्ण है?",
+    "devanagari_query": "भारतीय मानसून कृषि के लिए क्यों महत्वपूर्ण है?",
+    "english_query": "Indian मानसून कृषि of लिए why महत्वपूर्ण is",
+    "intent": "reason",
+    "named_entities": [
+      {
+        "text": "भारत",
+        "canonical_form": "India",
+        "type": "LOCATION"
+      }
+    ],
+    "key_terms": [
+      "India",
+      "भारतीय",
+      "मानसून",
+      "कृषि",
+      "लिए",
+      "महत्वपूर्ण"
+    ],
+    "constraints": {
+      "numbers": [],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "भारतीय मानसून कृषि के लिए क्यों महत्वपूर्ण है?",
+        "language": "hi",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      },
+      {
+        "query": "Indian मानसून कृषि of लिए why महत्वपूर्ण is",
+        "language": "en",
+        "kind": "translation",
+        "score": 0.9,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  },
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "1857 ki kranti ke mukhya karan kya the?",
+    "detected_language": "roman_hindi",
+    "normalized_query": "1857 ki kranti ke mukhya karan kya the?",
+    "devanagari_query": "",
+    "english_query": "",
+    "intent": "general_information",
+    "named_entities": [],
+    "key_terms": [
+      "kranti",
+      "mukhya",
+      "karan"
+    ],
+    "constraints": {
+      "numbers": [
+        "1857"
+      ],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "1857 ki kranti ke mukhya karan kya the?",
+        "language": "roman_hindi",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline Roman-Hindi translation is disabled; original text is retained.",
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  },
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "Gandhi ne Dandi March kyu kiya?",
+    "detected_language": "roman_hindi",
+    "normalized_query": "Gandhi ne Dandi March kyun kiya?",
+    "devanagari_query": "",
+    "english_query": "",
+    "intent": "reason",
+    "named_entities": [
+      {
+        "text": "Gandhi",
+        "canonical_form": "Mahatma Gandhi",
+        "type": "PERSON"
+      }
+    ],
+    "key_terms": [
+      "Mahatma Gandhi",
+      "Dandi",
+      "March",
+      "kiya"
+    ],
+    "constraints": {
+      "numbers": [],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "Gandhi ne Dandi March kyun kiya?",
+        "language": "roman_hindi",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline Roman-Hindi translation is disabled; original text is retained.",
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  },
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "Ram ko bhagwan kyu mante hain log?",
+    "detected_language": "roman_hindi",
+    "normalized_query": "Ram ko bhagwan kyun maante hain log?",
+    "devanagari_query": "",
+    "english_query": "",
+    "intent": "reason",
+    "named_entities": [],
+    "key_terms": [
+      "Ram",
+      "bhagwan",
+      "maante",
+      "log"
+    ],
+    "constraints": {
+      "numbers": [],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "Ram ko bhagwan kyun maante hain log?",
+        "language": "roman_hindi",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline Roman-Hindi translation is disabled; original text is retained.",
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  },
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "How did the Indian Constitution promote equality?",
+    "detected_language": "english",
+    "normalized_query": "How did the Indian Constitution promote equality?",
+    "devanagari_query": "",
+    "english_query": "How did the Indian Constitution promote equality?",
+    "intent": "procedure_or_explanation",
+    "named_entities": [],
+    "key_terms": [
+      "Indian",
+      "Constitution",
+      "promote",
+      "equality"
+    ],
+    "constraints": {
+      "numbers": [],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "How did the Indian Constitution promote equality?",
+        "language": "en",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  },
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "What were the main achievements of the Indus Valley Civilization?",
+    "detected_language": "english",
+    "normalized_query": "What were the main achievements of the Indus Valley Civilization?",
+    "devanagari_query": "",
+    "english_query": "What were the main achievements of the Indus Valley Civilization?",
+    "intent": "general_information",
+    "named_entities": [],
+    "key_terms": [
+      "were",
+      "main",
+      "achievements",
+      "Indus",
+      "Valley",
+      "Civilization"
+    ],
+    "constraints": {
+      "numbers": [],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "What were the main achievements of the Indus Valley Civilization?",
+        "language": "en",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  },
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "How did the Green Revolution affect Indian farmers?",
+    "detected_language": "english",
+    "normalized_query": "How did the Green Revolution affect Indian farmers?",
+    "devanagari_query": "",
+    "english_query": "How did the Green Revolution affect Indian farmers?",
+    "intent": "procedure_or_explanation",
+    "named_entities": [
+      {
+        "text": "Green Revolution",
+        "canonical_form": "Green Revolution",
+        "type": "HISTORICAL_EVENT"
+      }
+    ],
+    "key_terms": [
+      "Green Revolution",
+      "affect",
+      "Indian",
+      "farmers"
+    ],
+    "constraints": {
+      "numbers": [],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "How did the Green Revolution affect Indian farmers?",
+        "language": "en",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  },
+  {
+    "diagnostics": {},
+    "schema_version": "0.3",
+    "original_query": "What contributions did Savitribai Phule make to education?",
+    "detected_language": "english",
+    "normalized_query": "What contributions did Savitribai Phule make to education?",
+    "devanagari_query": "",
+    "english_query": "What contributions did Savitribai Phule make to education?",
+    "intent": "general_information",
+    "named_entities": [],
+    "key_terms": [
+      "contributions",
+      "Savitribai",
+      "Phule",
+      "make",
+      "education"
+    ],
+    "constraints": {
+      "numbers": [],
+      "negation": false,
+      "comparisons": false
+    },
+    "search_queries": [
+      {
+        "query": "What contributions did Savitribai Phule make to education?",
+        "language": "en",
+        "kind": "original",
+        "score": 1.0,
+        "intent_preserved": null,
+        "entities_preserved": null
+      }
+    ],
+    "ranking_mode": "strategy_priority",
+    "warnings": [
+      "Baseline mode: translation is rule-based and not a verified semantic translation."
+    ]
+  }
+]

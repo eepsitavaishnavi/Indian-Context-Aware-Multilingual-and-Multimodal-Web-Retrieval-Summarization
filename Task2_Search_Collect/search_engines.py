@@ -20,6 +20,7 @@ Restarting the script clears the cache.
 import os
 import re
 import time
+from urllib.parse import urlsplit
 
 import requests
 
@@ -33,6 +34,10 @@ except ImportError:
 # Read from the environment. Never hardcode a real key here.
 BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
 BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+
+# Results requested per search, for Brave and every ddgs fallback.
+# Brave's web search accepts at most 20 per request.
+TOP_K = 15
 
 _DDGS_TO_BRAVE_COUNTRY = {
     "in-en": "IN",
@@ -61,7 +66,7 @@ _DEVANAGARI_RE = re.compile(r'[\u0900-\u097F]')
 #   * Serve stale results beyond CACHE_TTL_SECONDS
 #
 # Cache key includes every argument that changes the results, so
-# ("test", "in-en", 5, "en", True) and ("test", "in-en", 10, "en", True)
+# ("test", "in-en", 10, "en", True) and ("test", "in-en", 15, "en", True)
 # are distinct entries and don't clobber each other.
 
 _search_cache = {}
@@ -123,7 +128,7 @@ def set_brave_api_key(api_key):
     BRAVE_API_KEY = api_key
 
 
-def search_brave(query, region="in-en", max_results=5, api_key=None, search_lang=None):
+def search_brave(query, region="in-en", max_results=TOP_K, api_key=None, search_lang=None):
     """
     Query the official Brave Search API.
     Returns a list of results (possibly empty). Never raises.
@@ -189,9 +194,18 @@ def _try_ddgs_backend(query, region, max_results, backend):
     try:
         with DDGS() as ddgs:
             for r in ddgs.text(query, region=region, max_results=max_results, backend=backend):
+                url = r.get("href", "")
+                if not isinstance(url, str):
+                    continue
+                try:
+                    parsed = urlsplit(url)
+                    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                        continue
+                except ValueError:
+                    continue
                 results.append({
                     "title": r.get("title", ""),
-                    "url": r.get("href", ""),
+                    "url": url,
                     "text": r.get("body", ""),
                 })
     except Exception as e:
@@ -199,7 +213,7 @@ def _try_ddgs_backend(query, region, max_results, backend):
     return results
 
 
-def search_ddgs(query, region="in-en", max_results=5, prefer_bing=False):
+def search_ddgs(query, region="in-en", max_results=TOP_K, prefer_bing=False):
     """Returns (results, backend_name)."""
     backends = ["bing", "auto"] if prefer_bing else ["auto", "bing"]
     for backend in backends:
@@ -212,7 +226,7 @@ def search_ddgs(query, region="in-en", max_results=5, prefer_bing=False):
 # ═══════════════════════════════════════════════════════════
 # MAIN ENTRY
 # ═══════════════════════════════════════════════════════════
-def search_web(query, region="in-en", max_results=5, api_key=None, search_lang=None):
+def search_web(query, region="in-en", max_results=TOP_K, api_key=None, search_lang=None):
     """
     Main search function: Brave -> ddgs (Bing-first for Devanagari) -> worldwide.
     Returns (results, engine_name).

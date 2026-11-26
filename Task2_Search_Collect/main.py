@@ -1,3 +1,33 @@
+"""
+main.py - Task 2: On-the-Fly Web Search, Scraping & Multimodal Content Acquisition
+
+Full compliance with Task 2 requirements:
+  - Retrieve top-k (TOP_K = 15) per multilingual query
+  - Merge duplicate URLs (with provenance preservation)
+  - Study licences (CC0/CC BY/CC BY-SA/open government/institutional)
+  - Respect robots.txt + meta robots + X-Robots-Tag + rate limits + access restrictions
+  - Collect HTML, linked PDFs, linked images (when permitted)
+  - Store metadata: URL, title, author/org, pub_date, domain, language, content_type
+  - Accurately identify direct-extraction vs OCR content
+
+Downloads are organised per-query:
+    downloads/html_pages/<query_slug>/<uid>_<slug>.html
+    downloads/pdfs/<query_slug>/<uid>_<slug>.pdf
+    downloads/photos/<query_slug>/<uid>_<slug>.<ext>
+where <query_slug> is derived from `original_query` and (in a batch run)
+prefixed with a 1-based run index so folders sort in the order asked.
+
+Brave Search API key is read from the environment variable BRAVE_API_KEY.
+If unset, the search cascade falls through to DuckDuckGo automatically.
+
+Licence study:
+  `licence_category`   — what the page declared (cc-by-4.0, proprietary, unknown…)
+  `source_type`        — what kind of institution hosts it (government, academic…)
+  `licence_candidates` — if no licence tag was found, a candidate suggested by
+                         source_type (e.g. government_open). This is a SIGNAL,
+                         not a reclassification — `licence_category` stays 'unknown'.
+"""
+
 import json
 import os
 import re
@@ -9,6 +39,7 @@ import urllib.robotparser
 from collections import defaultdict
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
 
 import requests
 
@@ -24,7 +55,7 @@ try:
 except ImportError:
     HAS_PYPDF = False
 
-from search_engines import search_web
+from search_engines import TOP_K, search_web
 
 # ═══════════════════════════════════════════════════════════
 # CONFIG
@@ -54,6 +85,17 @@ HTTP_TIMEOUT = 15
 MAX_RETRIES = 2
 
 IMAGE_MIN_BYTES = 10_000
+
+# Linked resources followed from a collected HTML page. None = no limit.
+MAX_LINKED_PDFS_PER_PAGE = None
+MAX_LINKED_IMAGES_PER_PAGE = 5
+MAX_LINKED_FILES_PER_QUESTION = None   # optional global safety valve
+
+PDF_FUNNEL_COUNTERS = (
+    'pdf_links_seen', 'pdf_skipped_outside_content', 'pdf_links_after_dedup',
+    'pdf_skipped_by_cap',
+    'pdf_fetched_ok', 'pdf_fetch_failed',
+)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -366,6 +408,69 @@ def content_type_from_header(ct):
 # ═══════════════════════════════════════════════════════════
 # HTML PARSING
 # ═══════════════════════════════════════════════════════════
+# HTML elements that hold site menus, footers and sidebars, not the page's content.
+_NON_CONTENT_TAGS = ('nav', 'footer', 'aside')
+
+
+class _PdfLinkParser(HTMLParser):
+    """Collect every <a href> whose URL path ends in .pdf, with its anchor text."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.links = []
+        self._link = None
+        self._text = []
+        self._outside = dict.fromkeys(_NON_CONTENT_TAGS, 0)
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._outside:
+            self._outside[tag] += 1
+        if tag != 'a':
+            return
+        self._close_link()
+        href = (dict(attrs).get('href') or '').strip()
+        try:
+            is_pdf = urllib.parse.urlparse(href).path.lower().endswith('.pdf')
+        except ValueError:
+            return
+        if is_pdf:
+            self._link = {'url': href, 'anchor_text': None,
+                          'outside_content': any(self._outside.values())}
+
+    def handle_data(self, data):
+        if self._link is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if self._outside.get(tag):
+            self._outside[tag] -= 1
+        if tag == 'a':
+            self._close_link()
+
+    def _close_link(self):
+        if self._link is not None:
+            text = ' '.join(''.join(self._text).split())
+            self._link['anchor_text'] = text or None
+            self.links.append(self._link)
+        self._link = None
+        self._text = []
+
+    def close(self):
+        super().close()
+        self._close_link()
+
+
+def extract_pdf_links(html_text):
+    """All PDF links in document order, duplicates included."""
+    parser = _PdfLinkParser()
+    try:
+        parser.feed(html_text or '')
+        parser.close()
+    except Exception as e:
+        print(f"[WARNING] PDF link parsing stopped early: {e}")
+    return parser.links
+
+
 def parse_html_metadata(html_text):
     out = {
         'title': None, 'author': None, 'pub_date': None,
@@ -419,11 +524,7 @@ def parse_html_metadata(html_text):
     else:
         out['licence'] = meta(['license', 'dc.rights', 'copyright'])
 
-    pdf_links = re.findall(
-        r'<a[^>]+href\s*=\s*["\']([^"\']+\.pdf)["\']',
-        html_text, re.IGNORECASE
-    )
-    out['linked_pdfs'] = list(set(pdf_links))[:5]
+    out['linked_pdfs'] = extract_pdf_links(html_text)
 
     image_links = []
     seen_images = set()
@@ -442,7 +543,7 @@ def parse_html_metadata(html_text):
             'alt': attrs.get('alt', '').strip(),
             'title': attrs.get('title', '').strip(),
         })
-    out['linked_images'] = image_links[:5]
+    out['linked_images'] = image_links
 
     return out
 
@@ -493,6 +594,39 @@ def _link_is_relevant(link_url, key_terms, metadata_text=None):
         if t_alnum and t_alnum in alnum:
             return True
     return False
+
+
+def _matched_key_terms(url, anchor_text, key_terms):
+    """Key terms found in the decoded URL or anchor text. Information only."""
+    return [
+        term for term in (key_terms or [])
+        if term and (
+            _link_is_relevant(url, [term])
+            or (anchor_text and _link_is_relevant(url, [term], anchor_text))
+        )
+    ]
+
+
+def _new_pdf_funnel():
+    funnel = {name: 0 for name in PDF_FUNNEL_COUNTERS}
+    funnel['pdf_excluded_by_check'] = {}
+    return funnel
+
+
+def merge_pdf_funnels(first, second):
+    """Add two {'run': counters, 'pages': [...]} funnels (multi-question runs)."""
+    run = _new_pdf_funnel()
+    pages = []
+    for funnel in (first, second):
+        if not funnel:
+            continue
+        for name in PDF_FUNNEL_COUNTERS:
+            run[name] += funnel['run'][name]
+        for status, count in funnel['run']['pdf_excluded_by_check'].items():
+            run['pdf_excluded_by_check'][status] = (
+                run['pdf_excluded_by_check'].get(status, 0) + count)
+        pages.extend(funnel['pages'])
+    return {'run': run, 'pages': pages}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -849,7 +983,7 @@ def build_keyword_boost_query(key_terms):
     return {'query': quoted, 'language': language, 'kind': 'keyword_boost', 'score': None}
 
 
-def search_and_collect(search_queries, top_k=10, download=True, query_index=None,
+def search_and_collect(search_queries, top_k=TOP_K, download=True, query_index=None,
                        download_dir=None):
     t_start = time.time()
 
@@ -1132,7 +1266,85 @@ def search_and_collect(search_queries, top_k=10, download=True, query_index=None
         print(f"  {tag} {url[:70]}")
         return doc, html_meta
 
-    for url, origin in url_to_origin.items():
+    # Search results are processed on their own turn (keeping their search
+    # provenance), so a link to one of them is not queued a second time.
+    queued_urls = {normalize_url(u) for u in url_to_origin}
+    linked_queued = 0
+    pdf_pages = []
+
+    def within_question_limit():
+        return (MAX_LINKED_FILES_PER_QUESTION is None
+                or linked_queued < MAX_LINKED_FILES_PER_QUESTION)
+
+    def add_linked(abs_url, anchor_text, origin, parent_id):
+        nonlocal linked_queued
+        r = process_url(abs_url, origin, is_linked=True, parent_id=parent_id)
+        if not r:
+            return None
+        linked_queued += 1
+        doc = r[0]
+        doc['matched_key_terms'] = _matched_key_terms(abs_url, anchor_text, key_terms)
+        doc['link_anchor_text'] = anchor_text
+        documents.append(doc)
+        return doc
+
+    def follow_pdf_links(page_url, links, origin, parent_id):
+        counts = _new_pdf_funnel()
+        counts['pdf_links_seen'] = len(links)
+
+        candidates = {}
+        for link in links:
+            if link.get('outside_content'):
+                counts['pdf_skipped_outside_content'] += 1
+                continue
+            try:
+                abs_url = urllib.parse.urljoin(page_url, link['url'])
+                if urllib.parse.urlparse(abs_url).scheme.lower() not in ('http', 'https'):
+                    continue
+            except ValueError:
+                continue
+            norm = normalize_url(abs_url)
+            if norm in processed_urls or norm in queued_urls:
+                continue
+            entry = candidates.setdefault(norm, {'url': abs_url, 'anchor_text': None})
+            entry['anchor_text'] = entry['anchor_text'] or link['anchor_text']
+        counts['pdf_links_after_dedup'] = len(candidates)
+
+        for position, link in enumerate(candidates.values()):
+            page_full = (MAX_LINKED_PDFS_PER_PAGE is not None
+                         and position >= MAX_LINKED_PDFS_PER_PAGE)
+            if page_full or not within_question_limit():
+                counts['pdf_skipped_by_cap'] += 1
+                continue
+            doc = add_linked(link['url'], link['anchor_text'], origin, parent_id)
+            if not doc:
+                continue
+            status = doc['extraction_status']
+            if status == 'success':
+                counts['pdf_fetched_ok'] += 1
+            elif status == 'fetch_failed':
+                counts['pdf_fetch_failed'] += 1
+            else:
+                excluded = counts['pdf_excluded_by_check']
+                excluded[status] = excluded.get(status, 0) + 1
+
+        if counts['pdf_skipped_by_cap']:
+            print(f"  [CAP] skipped {counts['pdf_skipped_by_cap']} PDF link(s) "
+                  f"on {page_url[:65]}")
+        if counts['pdf_links_seen']:
+            print(f"  [PDFS] {page_url[:65]} — {counts}")
+            pdf_pages.append({'page_url': page_url, 'parent_doc_id': parent_id, **counts})
+
+    # One entry per canonical page: spellings such as with and without "www."
+    # are fetched once, and every search that found either one is kept.
+    pages = {}
+    for url, origins in url_to_origin.items():
+        _, known = pages.setdefault(normalize_url(url), (url, []))
+        for origin in origins:
+            if (origin['query'], origin['kind']) not in {(o['query'], o['kind']) for o in known}:
+                known.append(origin)
+
+    for url, origin in pages.values():
         result = process_url(url, origin)
         if not result:
             continue
@@ -1145,15 +1357,16 @@ def search_and_collect(search_queries, top_k=10, download=True, query_index=None
                 and doc['licence_permits_processing']):
             parent_id = doc['doc_id']
 
-            for pdf_url in html_meta.get('linked_pdfs', []):
-                abs_url = urllib.parse.urljoin(url, pdf_url)
-                if not _link_is_relevant(abs_url, key_terms):
-                    print(f"  [IRREL] pdf   {abs_url[:65]}")
-                    continue
-                r = process_url(abs_url, origin, is_linked=True, parent_id=parent_id)
-                if r: documents.append(r[0])
+            follow_pdf_links(url, html_meta.get('linked_pdfs', []), origin, parent_id)
 
-            for image in html_meta.get('linked_images', []):
+            images = html_meta.get('linked_images', [])
+            if (MAX_LINKED_IMAGES_PER_PAGE is not None
+                    and len(images) > MAX_LINKED_IMAGES_PER_PAGE):
+                print(f"  [CAP] skipped {len(images) - MAX_LINKED_IMAGES_PER_PAGE} "
+                      f"image link(s) on {url[:65]}")
+                images = images[:MAX_LINKED_IMAGES_PER_PAGE]
+
+            for position, image in enumerate(images):
                 if isinstance(image, dict):
                     img_url = image.get('url', '')
                     image_metadata = ' '.join(
@@ -1167,8 +1380,13 @@ def search_and_collect(search_queries, top_k=10, download=True, query_index=None
                         abs_url, key_terms, image_metadata):
                     print(f"  [IRREL] image {abs_url[:65]}")
                     continue
-                r = process_url(abs_url, origin, is_linked=True, parent_id=parent_id)
-                if r: documents.append(r[0])
+                if normalize_url(abs_url) in queued_urls:
+                    continue
+                if not within_question_limit():
+                    print(f"  [CAP] question limit reached, skipped up to "
+                          f"{len(images) - position} image link(s) on {url[:65]}")
+                    break
+                add_linked(abs_url, None, origin, parent_id)
 
     print("\n" + "="*60 + "\nMERGE DUPLICATES\n" + "="*60)
     documents = merge_duplicates(documents)
@@ -1206,6 +1424,10 @@ def search_and_collect(search_queries, top_k=10, download=True, query_index=None
         'task1_schema_version': task1_schema_version,
         'collection_time_seconds': round(time.time() - t_start, 2),
     }
+    funnel = merge_pdf_funnels(None, None)
+    for page in pdf_pages:
+        funnel = merge_pdf_funnels(funnel, {'run': page, 'pages': [page]})
+    stats['linked_pdf_funnel'] = funnel
     return documents, stats
 
 
@@ -1276,6 +1498,7 @@ def save_output(documents, stats, top_k):
                 'detected_language': stats.get('detected_language'),
                 'key_terms': stats.get('key_terms'),
                 'task1_schema_version': stats.get('task1_schema_version'),
+                'linked_pdf_funnel': stats.get('linked_pdf_funnel'),
 
                 'total_urls_found': raw,
                 'unique_top_level_urls': uniq_top_level,
@@ -1336,14 +1559,14 @@ def save_output(documents, stats, top_k):
           f"engines={dict(engine_counts)} "
           f"source_types={dict(source_type_dist)} "
           f"time={stats.get('collection_time_seconds', 0)}s")
+    if stats.get('linked_pdf_funnel'):
+        print(f"[PDF FUNNEL] {stats['linked_pdf_funnel']['run']}")
 
 
 # ═══════════════════════════════════════════════════════════
 # DEMO
 # ═══════════════════════════════════════════════════════════
 if __name__ == '__main__':
-    TOP_K = 10
-
     input_path = sys.argv[1] if len(sys.argv) > 1 else TASK1_INPUT_FILE
 
     print("="*60)
@@ -1376,6 +1599,8 @@ if __name__ == '__main__':
                 combined_stats[k] = combined_stats.get(k, 0) + stats.get(k, 0)
             combined_stats['variants_searched'] = (
                 combined_stats.get('variants_searched', []) + stats.get('variants_searched', []))
+            combined_stats['linked_pdf_funnel'] = merge_pdf_funnels(
+                combined_stats.get('linked_pdf_funnel'), stats.get('linked_pdf_funnel'))
             for k in ('original_query', 'normalized_query', 'query_slug', 'key_terms',
                       'detected_language', 'task1_schema_version'):
                 existing = combined_stats.get(k)

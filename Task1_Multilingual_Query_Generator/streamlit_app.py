@@ -1,4 +1,3 @@
-
 import os
 import streamlit as st
 
@@ -17,7 +16,7 @@ st.caption(
     "Task 1 — dynamic Hindi, Roman-Hindi, English and mixed-query processing"
 )
 
-st.caption("Backend: " + os.getenv("QUERY_BACKEND", "baseline"))
+st.caption("Backend: " + os.getenv("QUERY_BACKEND", "auto"))
 
 
 # User input

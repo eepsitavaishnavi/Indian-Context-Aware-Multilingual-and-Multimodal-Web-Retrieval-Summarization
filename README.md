@@ -17,11 +17,11 @@ requirements, and writes a package that Task 3 can process.
 ```text
 
 ├── Task1_Multilingual_Query_Generator\
-│   ├── app.py
-│   ├── streamlit_app.py
-│   ├── test_app.py
-│   ├── requirements.txt
-│   └── README.md
+    ├── app.py
+    ├── streamlit_app.py
+    ├── test_app.py
+    ├── requirements.txt
+    └── README.md
 └── Task2_Search_Collect\
     ├── main.py
     ├── search_engines.py

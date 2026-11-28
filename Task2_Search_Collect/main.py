@@ -1,5 +1,5 @@
 """
-main.py - Task 2: On-the-Fly Web Search, Scraping & Multimodal Content Acquisition
+main.py 
 
 Full compliance with Task 2 requirements:
   - Retrieve top-k (TOP_K = 15) per multilingual query
@@ -10,22 +10,11 @@ Full compliance with Task 2 requirements:
   - Store metadata: URL, title, author/org, pub_date, domain, language, content_type
   - Accurately identify direct-extraction vs OCR content
 
-Downloads are organised per-query:
-    downloads/html_pages/<query_slug>/<uid>_<slug>.html
-    downloads/pdfs/<query_slug>/<uid>_<slug>.pdf
-    downloads/photos/<query_slug>/<uid>_<slug>.<ext>
-where <query_slug> is derived from `original_query` and (in a batch run)
-prefixed with a 1-based run index so folders sort in the order asked.
-
-Brave Search API key is read from the environment variable BRAVE_API_KEY.
-If unset, the search cascade falls through to DuckDuckGo automatically.
-
 Licence study:
   `licence_category`   — what the page declared (cc-by-4.0, proprietary, unknown…)
   `source_type`        — what kind of institution hosts it (government, academic…)
   `licence_candidates` — if no licence tag was found, a candidate suggested by
-                         source_type (e.g. government_open). This is a SIGNAL,
-                         not a reclassification — `licence_category` stays 'unknown'.
+                         source_type (e.g. government_open).
 """
 
 import json
@@ -57,9 +46,7 @@ except ImportError:
 
 from search_engines import TOP_K, search_web
 
-# ═══════════════════════════════════════════════════════════
-# CONFIG
-# ═══════════════════════════════════════════════════════════
+
 BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
 
 OUTPUT_FILE = "task3_input.json"
@@ -86,10 +73,9 @@ MAX_RETRIES = 2
 
 IMAGE_MIN_BYTES = 10_000
 
-# Linked resources followed from a collected HTML page. None = no limit.
 MAX_LINKED_PDFS_PER_PAGE = None
 MAX_LINKED_IMAGES_PER_PAGE = 5
-MAX_LINKED_FILES_PER_QUESTION = None   # optional global safety valve
+MAX_LINKED_FILES_PER_QUESTION = None   
 
 PDF_FUNNEL_COUNTERS = (
     'pdf_links_seen', 'pdf_skipped_outside_content', 'pdf_links_after_dedup',
@@ -97,10 +83,6 @@ PDF_FUNNEL_COUNTERS = (
     'pdf_fetched_ok', 'pdf_fetch_failed',
 )
 
-
-# ═══════════════════════════════════════════════════════════
-# SOURCE TYPE (domain-based)
-# ═══════════════════════════════════════════════════════════
 _KNOWN_SOURCE_OVERRIDES = {
     'rbi.org.in': 'government',
     'rbi.in':     'government',
@@ -144,17 +126,11 @@ def licence_candidates(source_type, licence_category):
     return []
 
 
-# ═══════════════════════════════════════════════════════════
-# STATE
-# ═══════════════════════════════════════════════════════════
 _robots_cache = {}
 _last_request_time = {}
 _global_last_request = [0.0]
 
 
-# ═══════════════════════════════════════════════════════════
-# ROBOTS.TXT
-# ═══════════════════════════════════════════════════════════
 def _normalize_for_robots(url):
     p = urllib.parse.urlparse(url)
     decoded = urllib.parse.unquote(p.path)
@@ -204,7 +180,7 @@ def _load_robots(domain, scheme='https'):
 
 
 def check_robots_allowed(url):
-    """Returns (allowed, crawl_delay)."""
+    
     try:
         parsed = urllib.parse.urlparse(url)
         entry = _load_robots(parsed.netloc, parsed.scheme)
@@ -218,9 +194,6 @@ def check_robots_allowed(url):
         return True, None
 
 
-# ═══════════════════════════════════════════════════════════
-# RATE LIMITING
-# ═══════════════════════════════════════════════════════════
 def _wait_global():
     elapsed = time.time() - _global_last_request[0]
     if elapsed < GLOBAL_QUERY_DELAY:
@@ -237,9 +210,6 @@ def _wait_domain(domain, crawl_delay=None):
     _last_request_time[domain] = time.time()
 
 
-# ═══════════════════════════════════════════════════════════
-# HTTP
-# ═══════════════════════════════════════════════════════════
 def _parse_retry_after(header_val):
     if not header_val:
         return None
@@ -307,9 +277,6 @@ def http_get(url, stream=False, crawl_delay=None, max_retries=MAX_RETRIES):
     return None, "exhausted retries"
 
 
-# ═══════════════════════════════════════════════════════════
-# WEBSITE TERMS — meta robots + X-Robots-Tag
-# ═══════════════════════════════════════════════════════════
 def check_meta_robots(html_text):
     if not html_text:
         return True, None
@@ -328,11 +295,7 @@ def check_meta_robots(html_text):
 
 
 def check_x_robots_tag(headers):
-    """
-    Read X-Robots-Tag from HTTP response headers. Modern sites use this
-    instead of (or in addition to) the <meta name="robots"> tag.
-    Returns (allowed, reason).
-    """
+    
     if not headers:
         return True, None
     xrt = headers.get('X-Robots-Tag') or headers.get('x-robots-tag')
@@ -345,9 +308,6 @@ def check_x_robots_tag(headers):
     return True, None
 
 
-# ═══════════════════════════════════════════════════════════
-# LICENCE
-# ═══════════════════════════════════════════════════════════
 def classify_licence(licence_str):
     if not licence_str or licence_str.lower() == 'unknown':
         return 'unknown'
@@ -379,9 +339,6 @@ def licence_permits_processing(category):
     return False
 
 
-# ═══════════════════════════════════════════════════════════
-# CONTENT TYPE
-# ═══════════════════════════════════════════════════════════
 def content_type_from_url(url):
     path = urllib.parse.urlparse(url).path.lower()
     if path.endswith('.pdf'):                      return 'pdf'
@@ -404,11 +361,6 @@ def content_type_from_header(ct):
     if ct.startswith('text/'):       return 'document'
     return None
 
-
-# ═══════════════════════════════════════════════════════════
-# HTML PARSING
-# ═══════════════════════════════════════════════════════════
-# HTML elements that hold site menus, footers and sidebars, not the page's content.
 _NON_CONTENT_TAGS = ('nav', 'footer', 'aside')
 
 
@@ -584,8 +536,6 @@ def _link_is_relevant(link_url, key_terms, metadata_text=None):
         return True
     if metadata_text == '':
         return False
-    # Image URLs are often hashes or CDN IDs. Use alt/title metadata when
-    # supplied; retain the URL only as a fallback for PDFs and old callers.
     candidate = metadata_text if metadata_text is not None else link_url
     low = urllib.parse.unquote(candidate).lower()
     alnum = re.sub(r'[^a-z0-9\u0900-\u097F]+', '', low)
@@ -629,9 +579,6 @@ def merge_pdf_funnels(first, second):
     return {'run': run, 'pages': pages}
 
 
-# ═══════════════════════════════════════════════════════════
-# DIRECT EXTRACTION vs OCR
-# ═══════════════════════════════════════════════════════════
 def pdf_has_text_layer(path, max_pages=None, min_chars=100):
     if not HAS_PYPDF or not path or not os.path.exists(path):
         return None, 0
@@ -716,9 +663,6 @@ def decide_ocr(url, content_type, text, saved_path=None):
     return False, "No downloaded text available; OCR not inferred"
 
 
-# ═══════════════════════════════════════════════════════════
-# DOWNLOAD
-# ═══════════════════════════════════════════════════════════
 def _query_slug(original_query, max_len=60):
     if not original_query:
         return "query"
@@ -757,12 +701,7 @@ def safe_filename(url, ext):
 
 def download_to_disk(url, fallback_ext='html', crawl_delay=None, query_slug=None,
                      download_dir=None):
-    """
-    Fetch a URL, save it to disk under downloads/<type>/<query_slug>/, and
-    return a result dict. The HTTP response is guaranteed closed on every
-    path — success, HTTP error, unsupported format, or write failure —
-    via the enclosing try/finally.
-    """
+   
     resp, err = http_get(url, stream=True, crawl_delay=crawl_delay)
     if err:
         return {'success': False, 'path': None, 'status_code': None,
@@ -817,9 +756,6 @@ def download_to_disk(url, fallback_ext='html', crawl_delay=None, query_slug=None
             pass
 
 
-# ═══════════════════════════════════════════════════════════
-# URL NORMALIZATION + DEDUP
-# ═══════════════════════════════════════════════════════════
 _WAYBACK_RE = re.compile(r'web\.archive\.org/web/\d+[a-z_]*/(https?://.+)$', re.IGNORECASE)
 
 _STRIP_QUERY_PARAMS = frozenset({
@@ -834,21 +770,7 @@ def _unwrap_wayback(url):
 
 
 def normalize_url(url):
-    """
-    Canonical form of a URL for deduplication.
-
-    Transforms applied:
-      1. Wayback Machine wrapper unwrapped
-      2. Fragment (#...) removed
-      3. Tracking params (utm_*, fbclid, gclid, hl) stripped
-      4. Query params sorted (so ?a=1&b=2 == ?b=2&a=1)
-      5. Trailing slash removed (except for "/" itself)
-      6. Leading "www." removed from host
-      7. Scheme and host lowercased
-      8. URL path PRESERVED with original case (many servers are
-         case-sensitive; lowercasing paths would falsely merge
-         distinct pages)
-    """
+   
     try:
         url = _unwrap_wayback(url.strip())
         p = urllib.parse.urlparse(url)
@@ -868,30 +790,18 @@ def normalize_url(url):
 
 
 def merge_duplicates(docs):
-    """
-    Collapse documents that normalize to the same URL.
-
-    When two documents share a canonical URL, merge their provenance:
-      * source_queries         — union of plain strings
-      * source_query_details   — union of dicts, deduped by (query, kind)
-      * origin_score           — recomputed as the MAX of all scores
-                                 across the merged details
-
-    The duplicate's saved file is deleted from disk unless it is the
-    same file as the one being kept.
-    """
+    
     merged = {}
     for d in docs:
         key = normalize_url(d['url'])
         if key in merged:
             kept = merged[key]
 
-            # Merge source_queries (strings)
+           
             existing_strings = kept.get('source_queries', []) or []
             new_strings = d.get('source_queries', []) or []
             kept['source_queries'] = list(set(existing_strings + new_strings))
 
-            # Merge source_query_details (dicts) — dedup by (query, kind)
             existing_details = list(kept.get('source_query_details', []) or [])
             new_details = d.get('source_query_details', []) or []
             seen = {(x.get('query'), x.get('kind')) for x in existing_details}
@@ -902,14 +812,12 @@ def merge_duplicates(docs):
                     seen.add(sig)
             kept['source_query_details'] = existing_details
 
-            # Recompute origin_score from the merged details
             scored = [x.get('score') for x in existing_details
                       if isinstance(x, dict) and x.get('score') is not None]
             kept['origin_score'] = max(scored) if scored else None
 
             print(f"  [DEDUP] {d['url'][:70]}...")
 
-            # Delete the duplicate's saved file if it's not the one being kept
             dup_path = d.get('saved_path')
             kept_path = kept.get('saved_path')
             if dup_path and dup_path != kept_path and os.path.exists(dup_path):
@@ -921,10 +829,6 @@ def merge_duplicates(docs):
             merged[key] = d
     return list(merged.values())
 
-
-# ═══════════════════════════════════════════════════════════
-# TASK 1 INPUT HANDLING
-# ═══════════════════════════════════════════════════════════
 def load_task1_input(path):
     with open(path, encoding='utf-8-sig') as f:
         data = json.load(f)
@@ -940,8 +844,6 @@ def normalize_task1_objects(data, source="request"):
                 f"Task 1 object #{i} in {source} must be a JSON object."
             )
 
-        # Accept both Task 1's full response (`query`) and its compact API
-        # contract (`text`), while keeping one canonical shape for retrieval.
         if 'search_queries' not in obj and 'queries' in obj:
             obj['search_queries'] = obj['queries']
         if not obj.get('original_query'):
@@ -1128,7 +1030,6 @@ def search_and_collect(search_queries, top_k=TOP_K, download=True, query_index=N
         elif not robots_ok:
             print(f"  [ROB] {url[:70]}")
 
-        # X-Robots-Tag from HTTP response headers
         xrt_ok, xrt_reason = check_x_robots_tag(http_headers)
         if not xrt_ok:
             if saved_path and os.path.exists(saved_path):
@@ -1160,7 +1061,6 @@ def search_and_collect(search_queries, top_k=TOP_K, download=True, query_index=N
             downloaded = False
             print(f"  [LIC] {url[:70]} — licence={licence_category}")
 
-        # Source-type classification (domain-based, universal rules)
         _domain = urllib.parse.urlparse(url).netloc.lower()
         source_type = classify_source_type(_domain)
         lic_candidates = licence_candidates(source_type, licence_category)
@@ -1266,8 +1166,6 @@ def search_and_collect(search_queries, top_k=TOP_K, download=True, query_index=N
         print(f"  {tag} {url[:70]}")
         return doc, html_meta
 
-    # Search results are processed on their own turn (keeping their search
-    # provenance), so a link to one of them is not queued a second time.
     queued_urls = {normalize_url(u) for u in url_to_origin}
     linked_queued = 0
     pdf_pages = []
@@ -1335,8 +1233,6 @@ def search_and_collect(search_queries, top_k=TOP_K, download=True, query_index=N
             print(f"  [PDFS] {page_url[:65]} — {counts}")
             pdf_pages.append({'page_url': page_url, 'parent_doc_id': parent_id, **counts})
 
-    # One entry per canonical page: spellings such as with and without "www."
-    # are fetched once, and every search that found either one is kept.
     pages = {}
     for url, origins in url_to_origin.items():
         _, known = pages.setdefault(normalize_url(url), (url, []))
@@ -1430,10 +1326,6 @@ def search_and_collect(search_queries, top_k=TOP_K, download=True, query_index=N
     stats['linked_pdf_funnel'] = funnel
     return documents, stats
 
-
-# ═══════════════════════════════════════════════════════════
-# SAVE OUTPUT
-# ═══════════════════════════════════════════════════════════
 def save_output(documents, stats, top_k):
     ocr_docs = [
         d for d in documents
@@ -1562,10 +1454,6 @@ def save_output(documents, stats, top_k):
     if stats.get('linked_pdf_funnel'):
         print(f"[PDF FUNNEL] {stats['linked_pdf_funnel']['run']}")
 
-
-# ═══════════════════════════════════════════════════════════
-# DEMO
-# ═══════════════════════════════════════════════════════════
 if __name__ == '__main__':
     input_path = sys.argv[1] if len(sys.argv) > 1 else TASK1_INPUT_FILE
 
@@ -1619,3 +1507,4 @@ if __name__ == '__main__':
 
     save_output(all_docs, combined_stats, TOP_K)
     print("\nDone.")
+

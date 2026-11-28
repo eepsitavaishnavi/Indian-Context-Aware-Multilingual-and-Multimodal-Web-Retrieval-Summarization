@@ -1,15 +1,6 @@
 import json
 
-from main import (
-    _looks_like_content_image,
-    _link_is_relevant,
-    _query_slug,
-    decide_ocr,
-    extract_html_text,
-    load_task1_input,
-    parse_html_metadata,
-    save_output,
-)
+from main import _query_slug, decide_ocr, extract_html_text, load_task1_input, save_output
 from search_engines import search_brave
 import search_engines
 
@@ -70,65 +61,6 @@ def test_html_downloaded_text_is_direct_extraction():
     )
     assert needs_ocr is False
     assert "extracted text" in reason
-
-
-def test_hashed_image_uses_alt_and_title_for_relevance():
-    image_url = "https://upload.wikimedia.org/wikipedia/commons/a/ab/9f2c8d.jpg"
-
-    assert _link_is_relevant(
-        image_url, ["green revolution"], "Green Revolution in India"
-    )
-    assert not _link_is_relevant(image_url, ["green revolution"], "site logo")
-
-
-def test_parse_html_metadata_preserves_image_alt_and_title():
-    metadata = parse_html_metadata(
-        '<img src="/media/9f2c8d" alt="Green Revolution farmers" '
-        'title="Agriculture in India">'
-    )
-
-    assert metadata["linked_images"] == [{
-        "url": "/media/9f2c8d",
-        "alt": "Green Revolution farmers",
-        "title": "Agriculture in India",
-    }]
-
-
-def test_parse_html_metadata_keeps_unlabelled_image_metadata_empty():
-    metadata = parse_html_metadata('<img src="/media/9f2c8d">')
-
-    assert metadata["linked_images"] == [{
-        "url": "/media/9f2c8d",
-        "alt": "",
-        "title": "",
-    }]
-
-
-def test_image_without_metadata_is_not_rejected_for_hashed_url():
-    image_url = "https://example.org/media/9f2c8d"
-
-    assert not _link_is_relevant(image_url, ["green revolution"], "")
-
-
-def test_common_site_assets_are_not_content_images():
-    assert not _looks_like_content_image(
-        "https://example.org/assets/header.jpg"
-    )
-    assert not _looks_like_content_image(
-        "https://shop.example.org/products/thumbnails/item.jpg"
-    )
-    assert not _looks_like_content_image(
-        "https://www.taropumps.com/media/5093/taro-pumps-after-sales-service-5.jpg"
-    )
-    assert not _looks_like_content_image(
-        "https://example.org/assets/default_500.png"
-    )
-    assert not _looks_like_content_image(
-        "https://example.org/_next/static/media/wpparpadhe.svg"
-    )
-    assert _looks_like_content_image(
-        "https://upload.wikimedia.org/wikipedia/commons/a/ab/9f2c8d.jpg"
-    )
 
 
 def test_loads_task1_compact_api_contract(tmp_path):

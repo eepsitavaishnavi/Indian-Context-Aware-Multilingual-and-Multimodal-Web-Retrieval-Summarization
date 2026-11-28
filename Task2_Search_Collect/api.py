@@ -1,7 +1,7 @@
 """FastAPI interface for Task 2.
 
 The API calls the same search_and_collect() implementation used by the CLI
-pipeline. It does not duplicate search, download, filtering, or OCR logic.
+pipeline.
 """
 
 from __future__ import annotations
@@ -13,7 +13,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from main import (
+    TOP_K,
     merge_duplicates,
+    merge_pdf_funnels,
     normalize_task1_objects,
     save_output,
     search_and_collect,
@@ -31,7 +33,7 @@ class Task2Request(BaseModel):
     task1: Any = Field(
         description="One full/compact Task 1 object or a list of objects."
     )
-    top_k: int = Field(default=10, ge=1, le=50)
+    top_k: int = Field(default=TOP_K, ge=1, le=50)
     download: bool = True
     download_dir: str | None = None
 
@@ -85,6 +87,10 @@ def _collect(task1_payload: Any, top_k: int, download: bool,
             combined_stats["variants_searched"] = (
                 combined_stats.get("variants_searched", [])
                 + stats.get("variants_searched", [])
+            )
+            combined_stats["linked_pdf_funnel"] = merge_pdf_funnels(
+                combined_stats.get("linked_pdf_funnel"),
+                stats.get("linked_pdf_funnel"),
             )
             for key in (
                 "original_query",

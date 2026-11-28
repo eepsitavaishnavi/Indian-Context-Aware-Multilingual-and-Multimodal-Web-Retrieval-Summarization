@@ -1,10 +1,3 @@
-"""
-Run Task 1, then Task 2, and write the package for Task 3.
-
-Example:
-    python run_pipeline.py --query "What is the Green Revolution?" --max-queries 4
-"""
-
 import argparse
 import json
 import sys
@@ -18,11 +11,11 @@ sys.path.insert(0, str(TASK1_DIR))
 sys.path.insert(0, str(TASK2_DIR))
 
 from app import generate_queries
-from main import load_task1_input, merge_duplicates, save_output, search_and_collect
+from main import (TOP_K, load_task1_input, merge_duplicates, merge_pdf_funnels,
+                  save_output, search_and_collect)
 
 
 MAX_QUERIES = 4
-TOP_K = 10
 TASK1_OUTPUT = TASK2_DIR / "task1_input.json"
 
 
@@ -92,6 +85,10 @@ def run_pipeline(user_queries, max_queries=MAX_QUERIES, top_k=TOP_K,
             combined_stats["variants_searched"] = (
                 combined_stats.get("variants_searched", [])
                 + stats.get("variants_searched", [])
+            )
+            combined_stats["linked_pdf_funnel"] = merge_pdf_funnels(
+                combined_stats.get("linked_pdf_funnel"),
+                stats.get("linked_pdf_funnel"),
             )
             for key in (
                 "original_query",

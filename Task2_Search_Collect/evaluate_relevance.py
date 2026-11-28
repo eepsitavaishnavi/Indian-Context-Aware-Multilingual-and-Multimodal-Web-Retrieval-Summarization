@@ -1,13 +1,3 @@
-"""Prepare and score human relevance judgments for Task 2 live runs.
-
-1. Run: python evaluate_relevance.py prepare
-2. Fill the 'label' column in relevance_labels.csv:
-   2 = directly answers/substantial
-   1 = on-topic/partial
-   0 = off-topic, spam, broken, or inaccessible
-3. Run: python evaluate_relevance.py score
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -281,4 +271,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

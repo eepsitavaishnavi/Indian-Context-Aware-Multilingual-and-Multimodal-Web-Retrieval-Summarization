@@ -24,19 +24,15 @@ from urllib.parse import urlsplit
 
 import requests
 
-# The ddgs package was renamed from `duckduckgo_search` in 2024. Support both
-# so the pipeline imports cleanly in environments that have either installed.
 try:
     from ddgs import DDGS
 except ImportError:
     from duckduckgo_search import DDGS
 
-# Read from the environment. Never hardcode a real key here.
 BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
 BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
 
-# Results requested per search, for Brave and every ddgs fallback.
-# Brave's web search accepts at most 20 per request.
+
 TOP_K = 15
 
 _DDGS_TO_BRAVE_COUNTRY = {
@@ -48,26 +44,6 @@ _DDGS_TO_BRAVE_COUNTRY = {
 
 _DEVANAGARI_RE = re.compile(r'[\u0900-\u097F]')
 
-
-# ═══════════════════════════════════════════════════════════
-# SEARCH RESULT CACHE
-# ═══════════════════════════════════════════════════════════
-# In-memory cache, keyed by the full call signature that produced the
-# results. Lives for the duration of the Python process — restarting the
-# script clears it.
-#
-# What this protects against:
-#   * Task 1 sending the same query string twice in one batch
-#   * Calling search_web() repeatedly from a notebook
-#   * Development-time re-runs within a single interpreter session
-#
-# What it does NOT do:
-#   * Persist across separate `python main.py` invocations
-#   * Serve stale results beyond CACHE_TTL_SECONDS
-#
-# Cache key includes every argument that changes the results, so
-# ("test", "in-en", 10, "en", True) and ("test", "in-en", 15, "en", True)
-# are distinct entries and don't clobber each other.
 
 _search_cache = {}
 
@@ -111,9 +87,6 @@ def search_cache_stats():
     return {'entries': len(_search_cache)}
 
 
-# ═══════════════════════════════════════════════════════════
-# BRAVE
-# ═══════════════════════════════════════════════════════════
 def _is_real_brave_key(key):
     """A key is 'real' only if non-empty and not the placeholder main.py ships with."""
     if not key:
@@ -185,10 +158,6 @@ def search_brave(query, region="in-en", max_results=TOP_K, api_key=None, search_
 
     return []
 
-
-# ═══════════════════════════════════════════════════════════
-# DDGS
-# ═══════════════════════════════════════════════════════════
 def _try_ddgs_backend(query, region, max_results, backend):
     results = []
     try:
@@ -223,17 +192,8 @@ def search_ddgs(query, region="in-en", max_results=TOP_K, prefer_bing=False):
     return [], "ddgs-none"
 
 
-# ═══════════════════════════════════════════════════════════
-# MAIN ENTRY
-# ═══════════════════════════════════════════════════════════
 def search_web(query, region="in-en", max_results=TOP_K, api_key=None, search_lang=None):
-    """
-    Main search function: Brave -> ddgs (Bing-first for Devanagari) -> worldwide.
-    Returns (results, engine_name).
-
-    Cached by (query, region, max_results, search_lang, using_brave).
-    Cache is process-local; restarting the script clears it.
-    """
+    
     using_brave = _is_real_brave_key(api_key or BRAVE_API_KEY)
     cache_key = _make_cache_key(query, region, max_results, search_lang, using_brave)
 
@@ -247,7 +207,6 @@ def search_web(query, region="in-en", max_results=TOP_K, api_key=None, search_la
     engine_hint = "bing-first" if has_devanagari else "auto-first"
     print(f"[INFO] Searching for: {query} (region={region}, lang={search_lang}, ddgs-order={engine_hint})")
 
-    # Step 1: Brave (primary, official)
     results = search_brave(query, region, max_results,
                            api_key=api_key, search_lang=search_lang)
     if results:
@@ -255,14 +214,12 @@ def search_web(query, region="in-en", max_results=TOP_K, api_key=None, search_la
         _cache_put(cache_key, results, "brave")
         return results, "brave"
 
-    # Step 2: ddgs (Bing-first for Devanagari queries)
     results, backend = search_ddgs(query, region, max_results, prefer_bing=has_devanagari)
     if results:
         print(f"[INFO] Got {len(results)} results from {backend}")
         _cache_put(cache_key, results, backend)
         return results, backend
 
-    # Step 3: Final fallback — worldwide region
     print("[WARNING] No results, trying worldwide region...")
     results, backend = search_ddgs(query, "wt-wt", max_results, prefer_bing=has_devanagari)
     if results:
@@ -270,8 +227,6 @@ def search_web(query, region="in-en", max_results=TOP_K, api_key=None, search_la
         _cache_put(cache_key, results, "ddgs-worldwide")
         return results, "ddgs-worldwide"
 
-    # Even empty results get cached — prevents re-querying a query that
-    # legitimately returned nothing during this run.
     print(f"[ERROR] No results found for: {query}")
     _cache_put(cache_key, [], "none")
     return [], "none"

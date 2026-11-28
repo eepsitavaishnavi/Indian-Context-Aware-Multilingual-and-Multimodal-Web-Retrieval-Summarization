@@ -15,28 +15,39 @@ requirements, and writes a package that Task 3 can process.
 ## Repository layout
 
 ```text
-
+E:\btp\
+├── requirements.txt
 ├── Task1_Multilingual_Query_Generator\
-    ├── app.py
-    ├── streamlit_app.py
-    ├── test_app.py
-    ├── requirements.txt
-    └── README.md
-└── Task2_Search_Collect\
+│   ├── app.py
+│   ├── streamlit_app.py
+│   ├── test_app.py
+│   ├── requirements.txt
+│   └── README.md
+└── task2_search_collect\
     ├── main.py
     ├── search_engines.py
     ├── run_pipeline.py
-    ├── test_task2_integration.py
-    ├── test_run_pipeline.py
+    ├── api.py
+    ├── evaluate_relevance.py
+    ├── relevance_labels.csv
+    ├── testbed.py
+    ├── tests\
+    │   ├── test_api.py
+    │   └── test_task2_integration.py
     ├── requirements.txt
     ├── README.md
     ├── task1_input.json
     └── task3_input.json
 ```
 
-Generated download directories are intentionally separate from source code.
 
+## Requirements
 
+- Python 3.10 or newer
+- Brave Search API key
+- Optional Task 1 local Ollama setup
+
+## Installation
 
 Install the unified dependencies from the repository root:
 
@@ -52,10 +63,10 @@ The module-specific requirements files remain available:
 
 ```powershell
 python -m pip install -r Task1_Multilingual_Query_Generator\requirements.txt
-python -m pip install -r Task2_Search_Collect\requirements.txt
+python -m pip install -r task2_search_collect\requirements.txt
 ```
 
-##Search configuration
+## Search configuration
 
 Brave is the primary search backend when a valid key is configured:
 
@@ -68,7 +79,7 @@ The key is read only from the environment.
 If Brave is unset, rejected, unavailable, or rate-limited, Task 2 falls back
 to DuckDuckGo through the configured search backends.
 
-## end-to-end execution
+## End-to-end execution
 
 The direct runner is the normal integration path. It calls Task 1 in-process,
 writes the Task 1 handoff, then passes that handoff to Task 2:
@@ -79,7 +90,7 @@ cd E:\btp\task2_search_collect
 python run_pipeline.py `
   --query "How did the Indian Constitution promote equality?" `
   --max-queries 4 `
-  --top-k 10
+  --top-k 15
 ```
 
 Run several questions in one batch by using one `--query` followed by all
@@ -94,7 +105,7 @@ python run_pipeline.py `
   "भारतीय मानसून कृषि के लिए क्यों महत्वपूर्ण है?" `
   "What were the main achievements of the Indus Valley Civilization?" `
   --max-queries 4 `
-  --top-k 10
+  --top-k 15
 ```
 
 Do not repeat `--query`; the command-line option accepts one or more values.
@@ -105,7 +116,7 @@ Do not repeat `--query`; the command-line option accepts one or more values.
 |---|---:|---|
 | `--query` | required | One or more user questions |
 | `--max-queries` | `4` | Maximum Task 1 variants per question, from 2 to 10 |
-| `--top-k` | `10` | Maximum search results per generated variant |
+| `--top-k` | `15` | Maximum search results per generated variant |
 | `--download-dir` | `downloads` | Optional separate download root |
 
 Use an isolated directory for experiments:
@@ -113,7 +124,7 @@ Use an isolated directory for experiments:
 ```powershell
 python run_pipeline.py `
   --query "What is the importance of the monsoon season in Indian agriculture?" `
-  --top-k 10 `
+  --top-k 15 `
   --download-dir E:\btp\task2_search_collect\downloads_monsoon_test
 ```
 
@@ -146,14 +157,12 @@ Task 2: search_and_collect()
         ├── robots and metadata restrictions
         ├── licence and source classification
         ├── HTML/PDF/image downloads
+        ├── linked PDF and image discovery
         ├── image relevance filtering
         └── OCR/direct-extraction classification
         │
         ▼
 task3_input.json + downloads\
-        │
-        ▼
-Task 3: OCR, passage extraction, confidence, and final evidence processing
 ```
 
 ## Task 1 details
@@ -233,6 +242,15 @@ For each generated variant, Task 2:
 10. Writes usable processing lists for Task 3 while retaining failed records
     for traceability.
 
+### Linked PDFs
+
+Every `.pdf` link on a collected HTML page that passed the compliance checks is
+followed (except links inside `<nav>`, `<footer>` and `<aside>`). The limits are
+`MAX_LINKED_PDFS_PER_PAGE`, `MAX_LINKED_IMAGES_PER_PAGE` and
+`MAX_LINKED_FILES_PER_QUESTION` in `main.py`. Each linked document records
+`matched_key_terms` and `link_anchor_text` for later stages, and
+`metadata.linked_pdf_funnel` counts PDF links per page and per run.
+
 ### Image filtering
 
 Linked images are not accepted solely because their URL contains a query
@@ -252,12 +270,10 @@ The current image flow:
   other content images when their metadata identifies the topic.
 - Applies the existing minimum image-size check.
 
-Old download folders are not retroactively cleaned. Use a new
-`--download-dir` for a clean run.
 
 ### OCR classification
 
-Task 2 classifies but does not execute OCR:
+Task 2 classifies OCR:
 
 - Images are routed to OCR by default.
 - PDFs are inspected across all pages.
@@ -267,15 +283,15 @@ Task 2 classifies but does not execute OCR:
 - HTML uses downloaded visible text rather than search snippets.
 - Failed or too-small records are excluded from usable processing lists.
 
-Task 3 should execute OCR, normalize OCR text, extract passages, calculate
-confidence, and preserve page/image provenance.
+OCR execution and later text processing take place after Task 2, outside this
+repository.
 
 ## Output files
 
 The integrated run creates:
 
 - `task1_input.json` - Task 1 to Task 2 handoff.
-- `task3_input.json` - Task 2 to Task 3 document package.
+- `task3_input.json` - Task 2 output package for the next stage.
 - `downloads\html_pages\<query-folder>\` - saved HTML.
 - `downloads\pdfs\<query-folder>\` - saved PDFs.
 - `downloads\photos\<query-folder>\` - saved images.
@@ -333,7 +349,110 @@ cd E:\btp\Task1_Multilingual_Query_Generator
 streamlit run streamlit_app.py
 ```
 
+Task 2 also has a REST interface:
+
+```powershell
+cd E:\btp\task2_search_collect
+python -m uvicorn api:app --host 127.0.0.1 --port 8001
+```
+
+Health check:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8001/health"
+```
+
+Available endpoints:
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `POST` | `/api/v1/task2/search-collect` | Return collected documents and statistics |
+| `POST` | `/api/v1/task2/task3-input` | Write and return `task3_input.json` |
+
+Example Task 2 API request:
+
+```powershell
+$body = @{
+  task1 = @{
+    original_query = "How did the Green Revolution affect Indian farmers?"
+    normalized_query = "How did the Green Revolution affect Indian farmers?"
+    detected_language = "english"
+    search_queries = @(
+      @{ query = "How did the Green Revolution affect Indian farmers?"; language = "en" }
+    )
+  }
+  top_k = 15
+  download = $true
+} | ConvertTo-Json -Depth 10
+
+Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8001/api/v1/task2/search-collect" `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+## Relevance evaluation
+
+The relevance evaluator prepares and scores title/URL labels for the Task 2
+search results:
+
+```powershell
+cd E:\btp\task2_search_collect
+
+python evaluate_relevance.py prepare --input task3_input.json --labels relevance_labels.csv
+python evaluate_relevance.py score --labels relevance_labels.csv
+```
+
+It computes:
+
+- P@1;
+- P@3;
+- P@5;
+- nDCG@5; and
+- useful-source rate.
+
+Labels `1` and `2` are relevant. Label `0` is not relevant. Duplicate canonical
+URLs are removed before ranking calculations.
+
+The reported P@K, nDCG@5 and useful-source values are based on
+preliminary title and URL relevance labels.
+
+## Controlled testbed
+
+Run the local controlled testbed:
+
+```powershell
+cd E:\btp\task2_search_collect
+python testbed.py
+```
+
+The testbed uses local HTTP servers and known ground truth to verify:
+
+- status decisions and exclusions;
+- OCR/direct extraction routing;
+- mixed-PDF page detection;
+- download and handoff reconciliation;
+- robots.txt compliance;
+- fault tolerance and network timing.
+
+Results are stored under `testbed_results`.
+
 ## Verification and tests
+
+Task 2 has two pytest test files in `task2_search_collect\tests`:
+
+| File | Tests | Coverage |
+|---|---:|---|
+| `test_api.py` | 3 | `/health`, rejection of a request with no search queries (HTTP 422), and `/api/v1/task2/search-collect` parameter pass-through using a mocked search-and-collect function |
+| `test_task2_integration.py` | 8 | Brave language mapping (Roman-Hindi to `hi`), readable Devanagari query slugs, HTML OCR routing, Task 1 loader contracts (compact, full, `queries` alias and UTF-8 BOM) and the OCR/direct-text lists in `task3_input.json` |
+
+The tests mock network calls and use temporary directories, so they need neither
+a Brave API key nor internet access. The API tests use FastAPI's `TestClient`,
+which needs `httpx`; install `pytest` and `httpx` if they are not already in
+your environment. The tests import `api`, `main` and `search_engines` directly,
+so run them from `task2_search_collect`.
 
 Run both module suites:
 
@@ -343,6 +462,12 @@ python -m pytest -q
 
 cd E:\btp\task2_search_collect
 python -m pytest -q
-python -m py_compile main.py run_pipeline.py search_engines.py
+python -m py_compile main.py run_pipeline.py search_engines.py api.py evaluate_relevance.py
 ```
 
+Run one Task 2 test file at a time:
+
+```powershell
+python -m pytest -q tests\test_api.py
+python -m pytest -q tests\test_task2_integration.py
+```
